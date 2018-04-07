@@ -10,11 +10,11 @@ except ImportError:
 
 # Step 1: Read unalt file structure
 list_paths = []
-export_base_folder = '/home/mathematics/kaggle/furniture/data/validation/'
+export_base_folder = 'c:\\validation_adjust\\'
 pic_size = 299
 
 
-for subdir, dirs, files in os.walk("/mnt/BC42459D42455CF0/FGVC/validation/"):
+for subdir, dirs, files in os.walk("c:\\validation"):
     for file in files:
         #print os.path.join(subdir, file)
         filepath = subdir + os.sep + file
@@ -33,8 +33,8 @@ def gen_alt(path, export_base_folder = None):
         except:
             print("ERROR")
 
-    pic.save(folder + '/' +
-             path.split('/')[-1] +
+    pic.save(folder + os.sep +
+             path.split(os.sep)[-1] +
              '.jpeg', 'JPEG', quality=100)
-
-Parallel(n_jobs=16, verbose = 10)(delayed(gen_alt)(path,
+if __name__ == "__main__":
+    Parallel(n_jobs=16, verbose = 100)(delayed(gen_alt)(path,export_base_folder) for path in list_paths);
