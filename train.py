@@ -93,7 +93,7 @@ with tf.device('/cpu:0'):
     inp = Input(shape=(PIC_SHAPE, PIC_SHAPE,3))
     raw_model = DenseNet169(include_top=False,weights='imagenet',input_shape = (299,299,3))(inp)
     flat = Flatten(input_shape=(9, 9, 1664))(raw_model)
-    fc128 = Dense(128,kernel_initializer='ones')(flat)
+    fc128 = Dense(128,kernel_initializer='ones',activation='sigmoid')(flat)
     model= Model(inputs= inp, outputs= fc128)
     model.layers[1].trainable = False
 
