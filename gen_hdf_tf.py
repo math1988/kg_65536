@@ -4,7 +4,6 @@ import time
 import numpy as np
 import h5py
 import os
-import pandas as pd
 from joblib import Parallel, delayed
 import PIL
 import shutil
@@ -12,6 +11,7 @@ import imgaug as ia
 from imgaug import augmenters as iaa
 
 
+from flag_parser import parse_flag
 
 
 # This function is going called parallelly to sample images.
@@ -59,44 +59,34 @@ def sample_func(ind, aug):
         pic = seq.augment_image(pic)
     return pic,label
 
-if __name__ == "__main__":
+def save_jpegs_into_hdf5(pic_root_folder, pic_size, aug_mark):
     # constant that need to modified
     N_JOBS = 4
     BATCH_SIZE = 2048
-    LOCK_PATH = "c:\\temp\\lock.kaggle"
-    try:
-        PIC_FOLDER = sys.argv[1]
-        EXPORT_FILE = sys.argv[2]
-        AUG_MARK = sys.argv[3]
-        if AUG_MARK == 'True':
-            AUG_MARK = True
-        elif AUG_MARK == 'False':
-            AUG_MARK = False
-        else:
-            raise Exception('Wrong input!')
-    except:
-        print('call format: python gen_hdf.py <PIC_FOLDER> <EXPORT_FILE>')
-
-
 
     path_label_list = []
-    for subdir, dirs, files in os.walk(PIC_FOLDER):
+    pic_folder = "{0}/Size_{1}".format(pic_root_folder, pic_size)
+
+    index = 0
+    while True:
+        export_file = "{0}/Augmentation_{1}#{2}.hdf5".format(pic_folder, aug_mark, index)
+        if not os.path.exists(export_file):
+            break;
+        index = index + 1
+    for subdir, dirs, files in os.walk(pic_folder):
         for file in files:
-            class_label = int(subdir.split(os.sep)[-1])
+            if (file[-5:]!=".jpeg"):
+                continue
+            # Format: <Directory>/Size_<size>/Class_<label_id>/...
+            class_label = int(subdir.split(os.sep)[-1].split("_")[-1])
             filepath = subdir + os.sep + file
-            path_label_list.append((filepath,class_label))
-
-
-    # get image size
-    temp_pic = np.float32(np.array(PIL.Image.open(path_label_list[0][0])))
-    pic_size = temp_pic.shape[0]
-    temp_pic = None
+            path_label_list.append((filepath, class_label))
 
     from_index = 0
-    to_index = from_index + BATCH_SIZE
     MAX_INDEX = len(path_label_list)
+    to_index = min(from_index + BATCH_SIZE, MAX_INDEX)
 
-    hdf5_file = h5py.File(EXPORT_FILE, mode='w')
+    hdf5_file = h5py.File(export_file, mode='w')
     hdf5_file.create_dataset("X",
                             (0, pic_size, pic_size, 3),
                             maxshape = (None, pic_size, pic_size, 3),
@@ -116,7 +106,7 @@ if __name__ == "__main__":
         for i in range(from_index, to_index):
             sample_func_first_arg_list.append(path_label_list[i])
 
-        res_list = Parallel(n_jobs=N_JOBS, verbose = 0)(delayed(sample_func)(first_arg, AUG_MARK) for first_arg in sample_func_first_arg_list)
+        res_list = Parallel(n_jobs=N_JOBS, verbose = 0)(delayed(sample_func)(first_arg, aug_mark) for first_arg in sample_func_first_arg_list)
         X = []
         y = []
         for res in res_list:
@@ -128,7 +118,7 @@ if __name__ == "__main__":
         res_list = None
         batch_size = to_index - from_index
 
-        with h5py.File(EXPORT_FILE, 'a') as f:
+        with h5py.File(export_file, 'a') as f:
             f["X"].resize((f["X"].shape[0] + batch_size), axis = 0)
             f["X"][-batch_size:] = X
             f["y"].resize((f["y"].shape[0] + batch_size), axis = 0)
@@ -136,4 +126,32 @@ if __name__ == "__main__":
             f.close()
         from_index = to_index
         to_index = min(to_index + batch_size, MAX_INDEX)
+    return export_file
+
+def Run():
+    #LOCK_PATH = "c:\\temp\\lock.kaggle"
+    try:
+        flag_map = parse_flag(sys.argv)
+
+        pic_root_folder = flag_map["image_folder"]
+        # Let the end user to pass in the |image_size|, in case multiple sizes data exist in the root folder.
+        pic_size = int(flag_map["image_size"])
+        aug_mark = flag_map["augmentation"]
+        if aug_mark == 'True':
+            aug_mark = True
+        elif aug_mark == 'False':
+            aug_mark = False
+        else:
+            raise Exception('Wrong input!')
+    except:
+        print('Syntax: {0}\\\n --image_folder=<Directory/>\\\n --image_size=<Number/>\\\n '
+              '--augmentation=<True|False>'.format(sys.argv[0]))
+        sys.exit(0)
+
+
+    export_file_name = save_jpegs_into_hdf5(pic_root_folder,pic_size, aug_mark)
+    print("Saved result to {0}".format(export_file_name))
+
+if __name__ == "__main__":
+    Run()
    
